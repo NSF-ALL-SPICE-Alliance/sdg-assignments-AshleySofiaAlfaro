@@ -29,6 +29,7 @@ library(ggpubr)
 library(janitor)
 library(ggcorrplot)
 library(vembedr)
+library(plotly)
 ```
 
 
@@ -197,13 +198,17 @@ To circle back and reinforce how the linear regression (line drawn through our s
   - What does this look like on scatter plot?
   
 ```{r, warning=FALSE, message=FALSE}
-ggplot(sdr_data, aes(x = goal_12_score, 
-                     y = goal_9_score)) +
+sdg_4_8_trend <- ggplot(sdr_data, aes(x = goal_8_score, 
+                     y = goal_4_score, label = country)) +
   geom_point() +
   geom_smooth() +
   stat_cor() +
-  theme_minimal() 
+  theme_minimal() +
+  labs(x = "SDG 8 Score",
+       y = "SDG 4 Score")
 
+ggplotly(sdg_4_8_trend) 
+# SDG 4: Quality Edu - SDG 8: Decent Work and Economic Growth
 ```
 
 ### <span style="color: red;">Challenge 1</span>
@@ -220,3 +225,5 @@ ggplot(sdr_data, aes(x = goal_12_score,
       - are there any points that don't follow the trend (outliers)
         
         - which country(s) are outliers?
+        
+Response: This scatter plot shows a positive correlation between SDG 8 and SDG 4 with a correlation coefficient of R = 0.62 and a statistically significant p-value (less than 2.2e -16). This suggests that countries with stronger economies tend to also have better educational systems. A possible explanation is that having a good economy provides governments with more resources to invest in education, leading to a well-educated population that contributes to the economic growth. However, there are several outliers where some countries have a relatively high SDG 8 score but much lower SDG 4 scores, and vice versa. To name a few, South Sedan, Lebanon, Mali, and Fiji don't follow the general trend. 
