@@ -218,6 +218,7 @@ The kmeans() function clusters countries into groups (int this case 2, visualize
 
 ```{r}
 k2 <- kmeans(sdr_data_imputed, centers = 2)
+k3 <- kmeans(sdr_data_imputed, centers = 3) # For challenge 1
 ```
 
 
@@ -226,16 +227,29 @@ We can visualize the outputs of the kmeans function with fviz_cluster()
 ```{r}
 fviz_cluster(k2, data = sdr_data_imputed) +
   theme_minimal()
+
+#For challenge 1
+fviz_cluster(k3, data = sdr_data_imputed) +
+  theme_minimal()
 ```
 
 You can view the countries and their assigned cluster in a dataframe with the code below
 
 
 ```{r}
-country_clusters <- as.data.frame(k2$cluster)
+#country_clusters <- as.data.frame(k2$cluster)
+country_clusters <- as.data.frame(k3$cluster)
 ```
 
+**Interpretation (3 Clusters)**
+At the bottom of the ``country_clusters``, you can find these:
+- Lower-Middle-Income Countries & Upper-Middle-Income Countries: 1
+- Low-Income Countries: 2
+- High-Income Countries: 3
 
+While countries are clustered based on how similar their SDG scores are, the country's income could influence the SDG scores. It appears that cluster 3 includes high performers (mostly rich countries), cluster 2 includes low performers (low-income countries), and cluster 1 includes moderate performers (often middle-income countries).
+
+However, there are countries, such as Cambodia and Namibia, that are in cluster 2 but are not considered low-income. This shows that income isn't everything. There are wealthier countries that still underperform in some SDG areas. 
 
 
 ### Random Forest Regression
@@ -246,7 +260,7 @@ To answer this question, we train a random forest model to make predictions of m
 
 
 ```{r}
-rf_matmort <- randomForest(normalized_score_sdg3_matmort ~ .,
+rf_literacy <- randomForest(normalized_score_sdg4_literacy ~ .,
                              data = sdr_data_imputed,
                              importance = TRUE)
 ```
@@ -257,14 +271,16 @@ The "% Var explained" value of 80.83 indicates that approximately 80.83% of the 
 
 
 ```{r}
-rf_matmort
+# rf_matmort
+rf_literacy
 ```
 
 Now we can look at the variables most important in making the predictions
 
 
 ```{r}
-importance_df <- as.data.frame(rf_matmort$importance)
+# importance_df <- as.data.frame(rf_matmort$importance)
+importance_df <- as.data.frame(rf_literacy$importance)
 ```
 
 Let's take the top 10 and graph them
@@ -279,7 +295,7 @@ importance_df_top_10 <- importance_df %>%
 ggplot(importance_df_top_10, aes(x = `%IncMSE`, y = reorder(variable, `%IncMSE`))) +
   geom_bar(stat = "identity", fill = "steelblue", color = "black") +
   theme_minimal() +
-  labs(title = "Most Important Variables in Predicting Maternal Mortality",
+  labs(title = "Most Important Variables in Predicting Literacy",
        subtitle = "Top 10",
        y = "SDG Indicator",
        x = "Feature Importance (% Increase in Mean Squared Error)")
@@ -296,7 +312,8 @@ Lastly, we want to know how these important variables influence the prediction: 
 
 
 ```{r}
-pdp::partial(rf_matmort, pred.var = "normalized_score_sdg6_sanita", plot = TRUE)
+# pdp::partial(rf_matmort, pred.var = "normalized_score_sdg6_sanita", plot = TRUE)
+pdp::partial(rf_literacy, pred.var = "normalized_score_sdg3_uhc", plot = TRUE)
 ```
 
 
@@ -315,7 +332,10 @@ Now that we saw how one variable influences the models prediction, how about 2 v
 
 
 ```{r}
-pd <- pdp::partial(rf_matmort, pred.var = c("normalized_score_sdg6_sanita", "normalized_score_sdg3_u5mort"))
+#pd <- pdp::partial(rf_matmort, pred.var = c("normalized_score_sdg6_sanita", "normalized_score_sdg3_u5mort"))
+
+pd <- pdp::partial(rf_literacy, pred.var = c("normalized_score_sdg3_uhc",
+                                             "normalized_score_sdg3_neonat"))
 # Default PDP
 plotPartial(pd)
 ```
