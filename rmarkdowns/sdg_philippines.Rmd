@@ -1,0 +1,434 @@
+---
+title: "Sustainable Development in the Philippines" 
+author: "Ashley Sofia Alfaro"
+date: "2025-05-07"
+output: html_document
+---
+
+This project uses the [2023 Sustainable Development Report](https://dashboards.sdgindex.org/). It covers the 17 Sustainable Development Goals (SDGs) and measures country performance, highlighting where it does well and where it needs more support.
+
+The Philippines is a developing country in Southeast Asia with over 114 million people. It is classified as a lower-middle-income country, but it faces persistent challenges like poverty, inequality, [ongoing human rights violations](https://www.hrw.org/world-report/2025/country-chapters/philippines), and the effects of climate change. That is why looking at its progress on the SDGs is important. By studying the Philippines, we can understand how global goals are working in real life and what can be done better to improve people's lives.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here) 
+library(janitor)
+library(naniar)
+library(plotly)
+library(fmsb)
+library(cluster)
+library(factoextra)
+library(ggpubr)
+```
+
+#### Read in Data
+
+```{r message=FALSE}
+sdr_data <- read_csv(here("data/SDR-2023-Data.csv"))
+```
+
+#### Clean Up the Data
+
+```{r}
+sdr_data <- sdr_data %>% 
+  clean_names()
+```
+
+#### List Column Names for Reference
+
+```{r, results = FALSE}
+colnames(sdr_data)
+```
+
+------------------------------------------------------------------------
+
+## Overview: How is the Philippines doing on the SDGs overall?
+
+#### Subset Data
+```{r}
+phl_scores <- sdr_data %>%
+  filter(country == "Philippines") %>%
+  select(matches("^goal_\\d{1,2}_score$")) %>%
+  pivot_longer(cols = everything(),
+               names_to = "Goal",
+               values_to = "Score") %>%
+  mutate(Goal = gsub("goal(\\d{1,2})_score", "SDG \\1", Goal))
+```
+
+```{r, echo = FALSE, results = FALSE}
+unique(phl_scores$Goal)
+```
+
+#### Prepare Data for Plot
+
+I wanted the SDGs to appear in numerical order to make it easier to follow. I also wanted to color the SDGs based on its score, so I used a grading-style system: scores above 79 were considered 'high,' scores below 60 were 'low,' and the rest were labeled 'normal.'
+
+```{r}
+phl_scores <- phl_scores %>%
+  mutate(
+    Goal_number = as.integer(gsub("goal_([0-9]+)_score", "\\1", Goal)),
+    Goal = paste0("Goal ", Goal_number),
+    Goal = factor(Goal, levels = paste0("Goal ", 1:17)),  # Numerical order
+    color = case_when(
+      Score >= 80 ~ "high",
+      Score <= 59 ~ "low",
+      TRUE ~ "normal"
+    )
+  )
+```
+
+I decided to do a **bar plot** because it is a quick and easy way to compare the SDG scores in the Philippines.
+
+```{r, echo = FALSE}
+ggplot(phl_scores, aes(x = Goal, y = Score, fill = color))+
+  geom_bar(stat = "identity", show.legend = TRUE)+
+  scale_fill_manual(
+    values = c("high" = "#4275FF", "low" = "#F5004E", "normal" = "grey"),
+    breaks = c("high", "low"),
+    labels = c("High (>80)", "Low (<59)"))+
+  labs(title = "Philippines SDG Scores (2023)",
+       x = "Sustainable Development Goals",
+       y = "Score",
+       fill = "")+
+  geom_text(aes(label = Score), vjust = -0.22, size = 2.8, fontface = "bold")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.9))
+```
+
+#### Highs and Lows in the Philippines' SDG Performance
+
+Looking at the Philippines' Sustainable Development scores, we can see that some areas are strong, while others need more attention.
+
+1.  [**Highest Score — Climate Action (SDG 13):**]{style="color:#4275FF;"}\
+    The Philippines scored the highest in **SDG 13**, which focuses on climate action. This shows the country is making significant efforts in addressing climate-related challenges.
+    -   [**Other High Scores:**]{style="color:#4275FF;"} No Poverty **(SDG 1)**, and Responsible Consumption and Production **(SDG 12)**\
+    -   These other high scores indicate some progress in basic economic development and sustainable resource use.
+2.  [**Lowest Score — Reduced Inequalities (SDG 10):**]{style="color:#F5004E;"}\
+    The biggest challenge appears to be **SDG 10**, which deals with reducing inequalities. A score this low shows that economic or social disparities such as income inequality, discrimination, or unequal access to opportunities are major issues in the country.
+    -   [**Other Low Scores:**]{style="color:#F5004E;"} Good Health and Well-Being **(SDG 3)**, Affordable and Clean Energy **(SDG 7)**, Industry, Innovation, and Infrastructure **(SDG 9)**, Life on Land **(SDG 15)**, and Peace, Justice, and Strong Institutions **(SDG 16)**\
+    -   These low scores reflect some of the persistent structural and social issues in the Philippines, especially in health systems, energy access, innovation capacity, and governance.
+
+In other words, the Philippines has three SDGs that scored an 80 or higher and are the right track, and six SDGs that scored below 60. One interesting contrast that stood out was SDG 12 scored relatively high, while SDG 9 scored quite low. I had expected that sustainable consumption and production (SDG 12) would rely on modern infrastructure and innovation (SDG 9). But despite the uneven progress, this helps us identify the areas where more effort and investment are needed.
+
+------------------------------------------------------------------------
+
+## Correlation: SDG 9 & SDG 12
+
+Now, I wanted to explore the relationship between SDG 9 and SDG 12. As we had just learned, the Philippines scored high on SDG 12 and low on SDG 9.
+
+I had initially assumed these goals would go hand-in-hand, but the data tells a different story.
+
+```{r, warning = FALSE, message=FALSE}
+sdg9_sdg12_cor <- ggplot(sdr_data, aes(x = goal_9_score, y = goal_12_score)) +
+  geom_point(aes(text = country), alpha = 0.6) +
+  geom_point(data = subset(sdr_data, country == "Philippines"),
+             aes(x = goal_9_score, y = goal_12_score, text = country),
+             color = "#F5004E", size = 1.5)+
+  geom_smooth(method = "loess")+
+  stat_cor(label.x = 75, label.y = 105, size = 3) +
+  labs(title = "Correlation Between SDG 9 and SDG 12",
+       x = "SDG 9 Score",
+       y = "SDG 12 Score") +
+  theme_minimal() 
+
+ggplotly(sdg9_sdg12_cor, tooltip = "text")
+```
+
+#### What Does This Tell Us?
+
+The result show a **strong negative correlation** (R = -0.82, p \< 2.2e-16) between SDG 9 and SDG 12 scores. This suggests a possible **trade-off**: countries that push hard for industrial development (SDG 9) might struggle more with responsible consumption (SDG 12), and vice versa.
+
+In the case of the Philippines, the high SDG 12 score may reflect successful policies on reducing waste or improving resource efficiency, but the low SDG 9 score shows we're lagging in building the innovation and infrastructure needed for long-term growth. So, the Philippines may be prioritizing environmental sustainability, perhaps due to the [increased likelihood of Category 3-5 typhoons](https://tinyurl.com/4s7kpaaj), but at the potential expense on building up innovation and infrastructure.
+
+------------------------------------------------------------------------
+
+## Comparison: SDG 10 Indicators
+
+Since SDG 10 is the Philippines' lowest score, I wanted to see how it compares to other countries through K-Means clustering and Principal Component Analysis (PCA). This will identify its peer groups, highlight outliers, and frame the relative position of the Philippines.
+
+#### Subset Data & Check for NA
+
+Note: The 13 entries where regions_used_for_the_sdr is marked as NA correspond to broader groupings such as "World", "Oceania", "High-income Countries", and "Sub-Saharan Africa".
+```{r}
+sdg10_data <- sdr_data %>%
+  select(country, regions_used_for_the_sdr, normalized_score_sdg10_gini, normalized_score_sdg10_palma)
+
+colSums(is.na(sdg10_data))
+```
+
+```{r, echo = FALSE, results = FALSE}
+sdg10_data %>%
+  filter(if_any(c(normalized_score_sdg10_gini, normalized_score_sdg10_palma), ~is.na(.))) %>%
+  select(regions_used_for_the_sdr)
+```
+
+```{r, echo=FALSE}
+na_data <- sdr_data %>%
+  select(country, region = regions_used_for_the_sdr, 
+         gini = normalized_score_sdg10_gini, 
+         palma = normalized_score_sdg10_palma)
+
+na_rows <- na_data %>%
+  filter(is.na(gini) | is.na(palma))
+
+na_counts <- na_rows %>%
+  count(region, name = "na_count")
+
+total_counts <- na_data %>%
+  count(region, name = "total_count")
+```
+
+#### NA Summary
+
+I proceeded to subset the data even further to calculate the percentage of countries from a certain region that has missing data.
+```{r}
+na_summary <- na_counts %>%
+  left_join(total_counts, by = "region") %>%
+  mutate(na_percent = round((na_count / total_count) * 100, 1))
+
+na_summary
+```
+
+A common approach to deal with missing data is imputation.
+
+However, in this case, I wanted to avoid the risk of imputation bias. This means that if I filled in the missing data, it could potentially affect the results and make the clustering less accurate because the imputed values might not truly reflect the actual values of those countries.
+
+So, to make sure the analysis remains clean and unbiased, I decided to remove countries with missing SDG 10 indicator scores from the analysis. This left 160 countries with complete data for comparison.
+
+```{r, warning = FALSE}
+sdg10_data <- sdr_data %>%
+  select(country, normalized_score_sdg10_gini, normalized_score_sdg10_palma) %>%
+  na.omit()
+
+rownames(sdg10_data) <- sdg10_data$country
+sdg10_vars <- sdg10_data %>%
+  select(where(is.numeric))
+```
+
+```{r, echo = FALSE, results = FALSE}
+x <- ggplot(sdr_data, aes(x = normalized_score_sdg10_gini, y = normalized_score_sdg10_palma, text = country))+
+  geom_point()+
+  geom_point(data = subset(sdr_data, regions_used_for_the_sdr == "East & South Asia"),
+             aes(x = normalized_score_sdg10_gini, y = normalized_score_sdg10_palma, color = "East and South Asia"))+
+  theme_minimal()
+  
+ggplotly(x, tooltip = "text") # This is just for me to understand relationship between Gini and Palma
+```
+
+I used the silhouette method to find the optimal number of cluster. In this case, the optimal number is two (2).
+```{r, echo = FALSE, fig.width=4, fig.height=3}
+fviz_nbclust(sdg10_vars, kmeans, method = "silhouette")
+```
+
+#### K-Means & PCA
+
+Then I set the number of clusters, performed PCA on `sdg10_vars`, and turned it into a dataframe.
+```{r}
+set.seed(42)
+k2 <- kmeans(sdg10_vars, centers = 2, nstart = 25)
+
+pca <- prcomp(sdg10_vars)
+pca_df <- data.frame(pca$x[,1:2], cluster = factor(k2$cluster), country = sdg10_data$country)
+```
+
+```{r, echo = FALSE, results = FALSE}
+country_clusters <- pca_df %>%
+  select(cluster, country)
+
+country_clusters
+```
+
+#### Clustering Countries by SDG 10: Where Does the Philippines Stand?
+
+To better understand how countries are performing on **SDG 10: Reduced Inequalities**, the countries are clustered based on the **Gini coefficient** and the **Palma ratio** indicators, which measure income inequality, and were combined into PC1 and PC2 to show patterns of inequality across countries.
+
+-   **Gini coefficient:** Measures income inequality across the whole population.
+-   **Palma ratio:** Focuses on the ratio of income between the richest 10% and the poorest 40%. It highlights the extreme top-heavy inequality.
+
+After reducing the data using PCA, we are left with two main clusters:
+
+-   🔵 [**Cluster 1**]{style="color:#4275FF;"}\
+    This cluster mostly includes **European and high-income countries** like Finland, Sweden, Germany, and France. These countries tend to have **lower levels of income inequality**, as reflected by low Gini and Palma scores. Their PCA positions are tightly grouped, showing consistency in equity-oriented development.\
+-   🔴 [**Cluster 2**]{style="color:#F5004E;"}\
+    This cluster includes a mix of **Latin American, African, and some Asian** countries, including the **Philippines**. These countries tend to have **higher income inequality**, or at least more varied performance on inequality indicators. There's more spread in this cluster's PCA positions, suggesting greater diversity in their inequality profiles.\
+
+```{r, echo = FALSE}
+custom_colors <- c("1" = "#4275FF", "2" = "#F5004E")
+
+p <- ggplot(pca_df, aes(x = PC1, y = PC2, color = cluster, text = country))+
+  geom_point(aes(alpha = 0.3), size = 1.5) +
+  scale_alpha_identity()+
+  scale_color_manual(values = custom_colors)+
+  geom_point(data = subset(pca_df, country == "Philippines"),
+             aes(x = PC1, y = PC2),
+             color = "#F5004E", size = 1.5)+
+  labs(title="K-Means Clustering of Countries by SDG 10 Indicators",
+       subtitle="Highlighting the Philippines")+
+  theme_minimal()
+
+ggplotly(p, tooltip="text") 
+```
+
+#### What Does This Mean for the Philippines?
+
+The Philippines is clustered with countries like Brazil, India, and South Africa, which tend to have higher income inequality. On the plot, the Philippines is not positioned at the extreme edge, following the general grouping before it diverges. While its positions shows it's not among the most unequal countries in terms of income distribution, there is still a long way to go to catch up to Cluster 1 nations.
+
+Notably, Cluster 2 shows a sudden divergence. After following a steady upward trend, countries begin to sharply veer off in a new direction. This shift could correspond to a group of countries that have high Gini scores but unexpectedly low Palma scores. In other words, these countries show significant income inequality overall, but it is not driven by the richest pulling far ahead.
+
+For the Philippines, its position near this divergence suggests it is still following the trend that when Gini goes up, Palma also increases. However, it's also close to a group of countries where income inequality seems to be more extreme and complicated. This means the Philippines isn't in the worst position yet, but it is important to keep an eye on it and act early to prevent deeper inequality issues.
+
+Overall, this clustering highlights that reducing inequality is a global challenge, and for the Philippines, the data shows where it stands today and hints at pathways forward.
+
+------------------------------------------------------------------------
+
+## Comparison: SDG 16 Indicators
+
+Human rights violations such as extrajudicial killings, "red-tagging" activists, press suppression, and inefficiencies in the justice system are ongoing in the Philippines. These are issues my parents often talk about, which made me want to look into SDG 16 more deeply.
+
+Comparing the Philippines' SDG 16 scores to the regional mean can offer insights into the country's performance and highlight areas for improvement.
+
+#### Subset Data
+
+Due to missing data, not all the SDG 16 indicators and countries in the East & South Asia region will be included in this analysis. The indicators excluded are child labor (Philippines does not have data on that), and the amount of people imprisoned.\
+Below are the countries that will be used for comparison:
+
+```{r}
+regional_data <- sdr_data %>%
+  filter(regions_used_for_the_sdr == "East & South Asia") %>%
+  select(country, matches("score_sdg16")) %>%
+  filter(!if_all(-country, is.na))
+
+unique(regional_data$country)
+```
+
+```{r}
+phl_sdg16 <- regional_data %>%
+  filter(country == "Philippines") %>%
+  pivot_longer(cols = -country, names_to = "indicator", values_to = "phl_score") %>%
+  filter(!is.na(phl_score)) %>%
+  select(-country)
+```
+
+#### Get Regional Means of SDG 16 Indicators
+
+Because the SDR-2023-Data.csv does not include pre-computed regional averages for the SDG 16 indicators, I had to calculate the mean scores for each by averaging all countries in the "East & South Asia" region excluding the Philippines. This will allow for a comparison between the Philippines and its regional peers.
+
+```{r}
+regional_means <- regional_data %>%
+  filter(country != "Philippines") %>%
+  summarise(across(-country, ~ mean(.x, na.rm = TRUE))) %>%
+  pivot_longer(cols = everything(), names_to = "indicator", values_to = "mean_score") %>%
+  filter(indicator %in% phl_sdg16$indicator)
+```
+
+#### Join the Philippines' Scores and Regional Means
+
+```{r}
+comparison_df <- left_join(phl_sdg16, regional_means, by = "indicator")
+```
+
+#### Prepare the Data for Lollipop Plot
+
+```{r}
+lollipop_data <- comparison_df %>%
+  pivot_longer(cols = c(phl_score, mean_score), 
+               names_to = "group", values_to = "value") %>%
+  pivot_wider(names_from = indicator, values_from = value) %>%
+  mutate(group = recode(group, 
+                        phl_score = "Philippines", 
+                        mean_score = "Regional Mean"))
+```
+
+```{r, echo = FALSE, results=FALSE}
+lollipop_data <- lollipop_data %>%
+  rename(
+    group = group,
+    Homicides = normalized_score_sdg16_homicides,
+    Detainment = normalized_score_sdg16_detain,
+    Safety = normalized_score_sdg16_safe,
+    BirthReg = normalized_score_sdg16_u5reg,
+    Corruption = normalized_score_sdg16_cpi,
+    WeaponsExp = normalized_score_sdg16_weaponsexp,
+    PressFreedom = normalized_score_sdg16_rsf,
+    Justice = normalized_score_sdg16_justice,
+    Admin = normalized_score_sdg16_admin,
+    PropertyLoss = normalized_score_sdg16_exprop
+  )
+
+lollipop_data <- as.data.frame(lollipop_data)
+
+lollipop_data <- lollipop_data %>%
+  pivot_longer(-group, names_to = "Indicator", values_to = "Score")
+```
+
+For more context, these are the SDG 16 indicators we will be looking at:
+
+-   **Homicides:** Measures how many people are intentionally killed per 100,000 population. *Lower scores indicate higher homicide rates.*\
+-   **Detainment:** Shows the percentage of prisoners who haven't been sentenced yet. *Lower scores indicate higher percentage.*\
+-   **Safety:** Based on how many people feel safe walking alone at night in their area.\
+-   **BirthReg**: The percentage of children under 5 who are officially registered with the government.\
+-   **Corruption:** Derived from the Corruption Perceptions Index, reflecting perceived levels of public sector corruption. *Lower corruption equals a higher score.*\
+-   **WeaponsExp:** Tracks how many major weapons are exported, adjusted for population size.\
+-   **PressFreedom:** Measures how free and independent the media is in the country. *Higher scores mean a freer press.*\
+-   **Justice:** Reflects how easily people can access and afford justice services.\
+-   **Admin:** Assesses how timely government agencies process things like permits or claims.\
+-   **PropertyLoss:** Indicates whether people are fairly compensated if their property is taken by the government.
+
+```{r, echo = FALSE}
+lollipop_sdg16 <- ggplot(lollipop_data, aes(x = reorder(Indicator, Score), y = Score, color = group, text = Score)) +
+  geom_segment(aes(xend = Indicator, y = 0, yend = Score), linewidth = 1, alpha = 0.5) +
+  geom_point(size = 3) +
+  coord_flip() +
+  scale_color_manual(values = c("Philippines" = "#F5004E", "Regional Mean" = "#4275FF")) +
+  labs(title = "SDG 16 Indicators: Philippines vs Regional Mean",
+    x = "Indicator",
+    y = "Score",
+    color = "") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+ggplotly(lollipop_sdg16, tooltip = "text")
+```
+
+#### SDG 16: Strengths & Weaknesses
+
+Looking at the lollipop plot, we can compare how the Philippines performs in SDG 16 indicators compared to regional average. The plot shows ten key areas like homicides, detainment, safety (i.e., feel safe walking alone at night), birth registration, corruption, and others, each scored from 0 to 100, where higher scores are better.
+
+**Strengths:**\
+
+-   The Philippines does really well in **Birth Registration** with a score of 90.79, higher than the regional mean of 82.5.\
+-   It also on par with the region in terms of **Homicides**. While the it scored 89.35 vs the regional 90.90, the Philippines is on par with the region in terms of safety from violent crimes like homicides.\
+-   Interestingly, the **Weapons Export** score is a perfect 100, higher than the regional 93.1, meaning that either the Philippines exports very few weapons or manages it well per capita.
+
+**Weaknesses:**
+
+-   **Detainment** rates are a big issue. The Philippines scores 23.25 here, compared to a much higher regional average of 61.49. This indicates a higher proportion of prisoners are being detained without a sentence, hinting at issues in the justice system.\
+-   **Corruption** is another area of concern with Philippines scoring under the regional mean of 36.30 at 26.46, showing that perceived corruption remains relatively high.\
+-   The **Press Freedom** score is also quite low at 12.94, which is below the regional 16.93. This suggests limited media freedom and possible threats to journalists or information access.\
+-   Other weaker areas include **Property Loss** and **Administrative Timeliness**, both below regional averages, pointing to gaps in due process and timely legal procedures.
+
+Overall, the lollipop plot shows mixed performance for the Philippines in SDG 16. While the country shows strengths in areas like birth registration, homicide rates, and weapons export control, it lags behind in detainment, corruption, press freedom, and property protection. This visualization makes it easy to see if the Philippines is aligned with or falling behind its neighbors.
+
+------------------------------------------------------------------------
+
+## Conclusion
+
+This analysis explored how the Philippines is performing across several SDGs, highlighting both strengths and areas for improvement.
+
+-   **SDG 9 vs SDG 12:** Surprisingly, we found a strong negative correlation between the two goals. This could signal a trade-off between environmental focus and industrial environment, but other factors could also influence this.\
+-   **SDG 10: Reduced Inequalities:** Using K-Means and PCA, we saw that the Philippines groups with countries that face higher income inequality. While not among the worst, its positions shows that inequality remains a challenge, and the country may be at risk of following more extreme trends if not addressed early.\
+-   **SDG 16: Peace, Justice & Strong Institutions:** The Philippines shows strengths in birth registration, homicide rates, and weaponry exports, but serious weaknesses in detainment without trial, corruption, and press freedom. Compared to its neighbors, the Philippines is clearly underperforming in several indicators.
+
+Overall, the Philippines still has a long way to go to become a sustainable country.
+
+------------------------------------------------------------------------
+
+```{=html}
+<style>
+h2 {
+  background-color: #E8EEFF;
+  text-align: center;
+}
+</style>
+```
